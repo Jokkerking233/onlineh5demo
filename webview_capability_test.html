@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebView 能力诊断（WebAuthn / Popup / Dialog）</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f7fa;
+            color: #222;
+            line-height: 1.6;
+        }
+        h1 { font-size: 20px; margin: 0 0 16px; }
+        h2 { font-size: 16px; margin: 24px 0 12px; color: #333; }
+        .card {
+            background: #fff;
+            border-radius: 10px;
+            padding: 16px 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+        .row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .row:last-child { border-bottom: none; }
+        .label { font-weight: 500; color: #333; }
+        .value {
+            font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", monospace;
+            font-size: 12px;
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        .ok { background: #e6f7e6; color: #1d7a1d; }
+        .ng { background: #fde2e2; color: #b40000; }
+        .warn { background: #fff4d6; color: #8a6100; }
+        button {
+            background: #07c160;
+            color: #fff;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 6px;
+            font-size: 14px;
+            cursor: pointer;
+            margin-right: 8px;
+            margin-top: 8px;
+        }
+        button:hover { background: #06ad55; }
+        button.secondary { background: #4a90e2; }
+        button.secondary:hover { background: #3b7fd1; }
+        button.danger { background: #e74c3c; }
+        button.danger:hover { background: #c0392b; }
+        pre {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            overflow: auto;
+            max-height: 240px;
+            margin: 8px 0 0;
+        }
+        .legend { font-size: 12px; color: #888; margin-top: 4px; }
+        dialog {
+            border: none;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+            max-width: 360px;
+        }
+        dialog::backdrop { background: rgba(0,0,0,0.5); }
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal-box {
+            background: #fff;
+            padding: 24px;
+            border-radius: 12px;
+            max-width: 360px;
+            width: 90%;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+        }
+    </style>
+</head>
+<body>
+
+<h1>WebView 能力诊断（用于 SSO Bug 1020423049158486254 验证）</h1>
+
+<!-- ============ 1. 基础环境 ============ -->
+<div class="card">
+    <h2>① 基础环境</h2>
+    <div class="row"><span class="label">User Agent</span><span class="value" id="ua"></span></div>
+    <div class="row"><span class="label">URL</span><span class="value" id="url"></span></div>
+    <div class="row"><span class="label">Secure Context (HTTPS/localhost)</span><span class="value" id="secure"></span></div>
+    <div class="legend">WebAuthn 必须在 Secure Context 下才可用。</div>
+</div>
+
+<!-- ============ 2. WebAuthn API 可用性 ============ -->
+<div class="card">
+    <h2>② WebAuthn API 检测</h2>
+    <div class="row"><span class="label">window.PublicKeyCredential</span><span class="value" id="pkc"></span></div>
+    <div class="row"><span class="label">navigator.credentials</span><span class="value" id="creds"></span></div>
+    <div class="row"><span class="label">navigator.credentials.create</span><span class="value" id="credsCreate"></span></div>
+    <div class="row"><span class="label">navigator.credentials.get</span><span class="value" id="credsGet"></span></div>
+    <div class="row"><span class="label">isUserVerifyingPlatformAuthenticatorAvailable()</span><span class="value" id="uvpa"></span></div>
+    <div class="row"><span class="label">isConditionalMediationAvailable()</span><span class="value" id="cma"></span></div>
+    <div class="legend">如果 ②全部为 ❌，则 xweb 内核完全没集成 WebAuthn → 本 Bug 主因确认。<br/>
+        如果 ②有 ✓ 但 UVPA = false，则 Chromium 编进来了但没接 macOS 平台 authenticator → 仍解释 Bug。
+    </div>
+</div>
+
+<!-- ============ 3. 实际触发 WebAuthn（关键） ============ -->
+<div class="card">
+    <h2>③ 触发 WebAuthn 弹窗（关键测试）</h2>
+    <p>点击下面按钮会调用 <code>navigator.credentials.create</code>，模拟亚马逊 SSO 页的注册/登录 passkey 行为。</p>
+    <button onclick="testWebAuthnCreate()">触发 Passkey 注册弹窗</button>
+    <button class="secondary" onclick="testWebAuthnGet()">触发 Passkey 登录弹窗</button>
+    <pre id="webauthnLog">等待操作...</pre>
+    <div class="legend">
+        预期：浏览器中应弹出 "PIN required" / Touch ID 系统弹窗。<br/>
+        客户端中：如果不弹但日志显示成功调用，可能就是窗口被吞 → 副因。<br/>
+        如果抛 <code>NotSupportedError</code> / <code>NotAllowedError</code> → 内核不支持。
+    </div>
+</div>
+
+<!-- ============ 4. window.open Popup 测试 ============ -->
+<div class="card">
+    <h2>④ window.open Popup 测试（验证 OnFramePopup 副因）</h2>
+    <button onclick="testWindowOpen('about:blank')">window.open(about:blank)</button>
+    <button class="secondary" onclick="testWindowOpen('https://www.qq.com')">window.open(qq.com)</button>
+    <button class="secondary" onclick="testWindowOpenWithFeatures()">window.open + features (popup=yes)</button>
+    <pre id="popupLog">等待操作...</pre>
+    <div class="legend">
+        预期：浏览器中应弹出新窗口或新 Tab。<br/>
+        客户端中：如果不弹但 <code>window.open</code> 返回非 null，说明 xweb 创建了但 OnFramePopup 没把它显示出来 → 副因确认。
+    </div>
+</div>
+
+<!-- ============ 5. HTML <dialog> Modal 测试 ============ -->
+<div class="card">
+    <h2>⑤ HTML <code>&lt;dialog&gt;</code> Modal 测试（排除排版问题）</h2>
+    <button onclick="testDialog()">打开 &lt;dialog&gt; modal</button>
+    <button class="secondary" onclick="testCustomModal()">打开自定义遮罩 modal</button>
+    <div class="legend">
+        如果这两个都正常显示 → 说明问题不是普通 DOM modal 显示问题，确认是 WebAuthn 或 popup 路径问题。
+    </div>
+</div>
+
+<!-- 自定义 Modal -->
+<div class="modal-overlay" id="customModal">
+    <div class="modal-box">
+        <h3 style="margin-top:0">自定义遮罩 Modal</h3>
+        <p>如果你能看到这个，说明纯 DOM/CSS modal 是正常的，问题确实在 WebAuthn 或 popup 路径上。</p>
+        <button onclick="document.getElementById('customModal').classList.remove('show')">关闭</button>
+    </div>
+</div>
+
+<dialog id="nativeDialog">
+    <h3 style="margin-top:0">HTML5 &lt;dialog&gt; 元素</h3>
+    <p>如果你能看到这个，说明 HTML5 &lt;dialog&gt; element 也正常。</p>
+    <button onclick="document.getElementById('nativeDialog').close()">关闭</button>
+</dialog>
+
+<!-- ============ 6. 完整日志输出 ============ -->
+<div class="card">
+    <h2>⑥ 完整诊断日志</h2>
+    <button onclick="copyLog()">复制日志</button>
+    <button class="danger" onclick="document.getElementById('fullLog').textContent=''">清空</button>
+    <pre id="fullLog"></pre>
+</div>
+
+<script>
+    function log(msg, level) {
+        var ts = new Date().toISOString().substr(11, 12);
+        var line = '[' + ts + '] ' + (level ? '[' + level + '] ' : '') + msg;
+        var el = document.getElementById('fullLog');
+        el.textContent = el.textContent + line + '\n';
+        el.scrollTop = el.scrollHeight;
+        try { console.log(line); } catch (e) {}
+    }
+
+    function setVal(id, value, ok) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.textContent = value;
+        el.classList.remove('ok', 'ng', 'warn');
+        if (ok === true) el.classList.add('ok');
+        else if (ok === false) el.classList.add('ng');
+        else el.classList.add('warn');
+    }
+
+    // ① 基础环境
+    setVal('ua', navigator.userAgent, null);
+    setVal('url', location.href, null);
+    setVal('secure', window.isSecureContext ? '✓ true' : '✗ false', window.isSecureContext);
+    log('UA: ' + navigator.userAgent);
+    log('URL: ' + location.href);
+    log('isSecureContext: ' + window.isSecureContext);
+
+    // ② WebAuthn 检测
+    var hasPKC = typeof window.PublicKeyCredential !== 'undefined';
+    setVal('pkc', hasPKC ? '✓ exist' : '✗ undefined', hasPKC);
+    log('PublicKeyCredential: ' + hasPKC, hasPKC ? 'OK' : 'NG');
+
+    var hasCreds = !!(navigator.credentials);
+    setVal('creds', hasCreds ? '✓ exist' : '✗ undefined', hasCreds);
+    log('navigator.credentials: ' + hasCreds, hasCreds ? 'OK' : 'NG');
+
+    var hasCreate = hasCreds && typeof navigator.credentials.create === 'function';
+    setVal('credsCreate', hasCreate ? '✓ function' : '✗ missing', hasCreate);
+    log('credentials.create: ' + hasCreate, hasCreate ? 'OK' : 'NG');
+
+    var hasGet = hasCreds && typeof navigator.credentials.get === 'function';
+    setVal('credsGet', hasGet ? '✓ function' : '✗ missing', hasGet);
+    log('credentials.get: ' + hasGet, hasGet ? 'OK' : 'NG');
+
+    if (hasPKC && typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === 'function') {
+        PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable().then(function (available) {
+            setVal('uvpa', available ? '✓ true' : '✗ false', available);
+            log('isUserVerifyingPlatformAuthenticatorAvailable: ' + available, available ? 'OK' : 'WARN');
+        }).catch(function (err) {
+            setVal('uvpa', 'error: ' + err.message, false);
+            log('UVPA error: ' + err.message, 'ERROR');
+        });
+    } else {
+        setVal('uvpa', '✗ method missing', false);
+        log('isUserVerifyingPlatformAuthenticatorAvailable method missing', 'NG');
+    }
+
+    if (hasPKC && typeof PublicKeyCredential.isConditionalMediationAvailable === 'function') {
+        PublicKeyCredential.isConditionalMediationAvailable().then(function (available) {
+            setVal('cma', available ? '✓ true' : '✗ false', available);
+            log('isConditionalMediationAvailable: ' + available);
+        }).catch(function (err) {
+            setVal('cma', 'error: ' + err.message, false);
+            log('isConditionalMediationAvailable error: ' + err.message, 'ERROR');
+        });
+    } else {
+        setVal('cma', '✗ method missing', false);
+        log('isConditionalMediationAvailable method missing', 'WARN');
+    }
+
+    // ③ 触发 WebAuthn create
+    function testWebAuthnCreate() {
+        var elog = document.getElementById('webauthnLog');
+        elog.textContent = '调用 navigator.credentials.create()...\n';
+        log('===== 触发 navigator.credentials.create =====');
+
+        if (!hasCreate) {
+            elog.textContent += '❌ navigator.credentials.create 不可用，无法测试\n';
+            log('credentials.create 不可用', 'NG');
+            return;
+        }
+
+        var rpId = location.hostname || 'localhost';
+        var challenge = new Uint8Array(32);
+        for (var i = 0; i < 32; i++) challenge[i] = Math.floor(Math.random() * 256);
+        var userId = new Uint8Array(16);
+        for (var j = 0; j < 16; j++) userId[j] = Math.floor(Math.random() * 256);
+
+        var options = {
+            publicKey: {
+                challenge: challenge,
+                rp: { id: rpId, name: 'WebAuthn Test' },
+                user: {
+                    id: userId,
+                    name: 'test@example.com',
+                    displayName: 'Test User'
+                },
+                pubKeyCredParams: [
+                    { type: 'public-key', alg: -7 },   // ES256
+                    { type: 'public-key', alg: -257 }  // RS256
+                ],
+                timeout: 60000,
+                authenticatorSelection: {
+                    userVerification: 'preferred'
+                },
+                attestation: 'none'
+            }
+        };
+
+        elog.textContent += '参数: rp.id=' + rpId + ', challenge=32字节\n';
+        elog.textContent += '⏳ 等待系统弹出 Touch ID / PIN 弹窗...\n';
+
+        var t0 = Date.now();
+        navigator.credentials.create(options).then(function (cred) {
+            var dt = Date.now() - t0;
+            elog.textContent += '✅ 成功！耗时 ' + dt + 'ms\n';
+            elog.textContent += 'id: ' + cred.id + '\n';
+            elog.textContent += 'type: ' + cred.type + '\n';
+            log('credentials.create 成功，耗时 ' + dt + 'ms', 'OK');
+        }).catch(function (err) {
+            var dt = Date.now() - t0;
+            elog.textContent += '❌ 失败！耗时 ' + dt + 'ms\n';
+            elog.textContent += 'name: ' + err.name + '\n';
+            elog.textContent += 'message: ' + err.message + '\n';
+            log('credentials.create 失败: ' + err.name + ' - ' + err.message, 'NG');
+        });
+    }
+
+    function testWebAuthnGet() {
+        var elog = document.getElementById('webauthnLog');
+        elog.textContent = '调用 navigator.credentials.get()...\n';
+        log('===== 触发 navigator.credentials.get =====');
+
+        if (!hasGet) {
+            elog.textContent += '❌ navigator.credentials.get 不可用\n';
+            log('credentials.get 不可用', 'NG');
+            return;
+        }
+
+        var challenge = new Uint8Array(32);
+        for (var i = 0; i < 32; i++) challenge[i] = Math.floor(Math.random() * 256);
+
+        var options = {
+            publicKey: {
+                challenge: challenge,
+                timeout: 60000,
+                userVerification: 'preferred',
+                rpId: location.hostname || 'localhost'
+            }
+        };
+
+        elog.textContent += '⏳ 等待系统弹出 PIN 弹窗...\n';
+        var t0 = Date.now();
+        navigator.credentials.get(options).then(function (cred) {
+            var dt = Date.now() - t0;
+            elog.textContent += '✅ 成功！耗时 ' + dt + 'ms\n';
+            log('credentials.get 成功，耗时 ' + dt + 'ms', 'OK');
+        }).catch(function (err) {
+            var dt = Date.now() - t0;
+            elog.textContent += '❌ 失败！耗时 ' + dt + 'ms\n';
+            elog.textContent += 'name: ' + err.name + '\n';
+            elog.textContent += 'message: ' + err.message + '\n';
+            log('credentials.get 失败: ' + err.name + ' - ' + err.message, 'NG');
+        });
+    }
+
+    // ④ window.open
+    function testWindowOpen(url) {
+        var elog = document.getElementById('popupLog');
+        elog.textContent = '调用 window.open("' + url + '")...\n';
+        log('===== window.open(' + url + ') =====');
+
+        try {
+            var w = window.open(url, '_blank');
+            if (w === null) {
+                elog.textContent += '❌ window.open 返回 null (被拦截)\n';
+                log('window.open 返回 null', 'NG');
+            } else {
+                elog.textContent += '✓ window.open 返回非 null\n';
+                elog.textContent += 'w.closed (立即): ' + w.closed + '\n';
+                log('window.open 返回非 null，closed=' + w.closed);
+                setTimeout(function () {
+                    try {
+                        elog.textContent += 'w.closed (500ms后): ' + w.closed + '\n';
+                        log('500ms 后 w.closed=' + w.closed);
+                    } catch (e) {
+                        elog.textContent += '检查 w.closed 抛错: ' + e.message + '\n';
+                    }
+                }, 500);
+            }
+        } catch (err) {
+            elog.textContent += '❌ window.open 抛错: ' + err.message + '\n';
+            log('window.open 抛错: ' + err.message, 'ERROR');
+        }
+    }
+
+    function testWindowOpenWithFeatures() {
+        var elog = document.getElementById('popupLog');
+        elog.textContent = '调用 window.open with features...\n';
+        log('===== window.open with features =====');
+        try {
+            var w = window.open('about:blank', '_blank', 'popup=yes,width=400,height=300');
+            elog.textContent += w === null ? '❌ 返回 null\n' : '✓ 返回非 null，closed=' + w.closed + '\n';
+            log('window.open with features 返回: ' + (w === null ? 'null' : 'non-null'));
+        } catch (err) {
+            elog.textContent += '❌ 抛错: ' + err.message + '\n';
+            log('window.open with features 抛错: ' + err.message, 'ERROR');
+        }
+    }
+
+    // ⑤ Dialog
+    function testDialog() {
+        log('===== 测试 <dialog> =====');
+        try {
+            var d = document.getElementById('nativeDialog');
+            if (typeof d.showModal === 'function') {
+                d.showModal();
+                log('<dialog>.showModal() 调用成功');
+            } else {
+                log('<dialog>.showModal 不存在，dialog 元素未实现', 'NG');
+                alert('dialog.showModal 不存在');
+            }
+        } catch (err) {
+            log('<dialog> 异常: ' + err.message, 'ERROR');
+        }
+    }
+
+    function testCustomModal() {
+        log('===== 测试自定义遮罩 modal =====');
+        document.getElementById('customModal').classList.add('show');
+    }
+
+    function copyLog() {
+        var text = document.getElementById('fullLog').textContent;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function () {
+                alert('已复制');
+            }).catch(function () {
+                fallbackCopy(text);
+            });
+        } else {
+            fallbackCopy(text);
+        }
+    }
+
+    function fallbackCopy(text) {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); alert('已复制'); }
+        catch (e) { alert('复制失败，请手动选择'); }
+        document.body.removeChild(ta);
+    }
+</script>
+
+</body>
+</html>
