@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>H5 Demo 导航</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 24px 20px;
+            color: #222;
+        }
+        .header {
+            text-align: center;
+            color: #fff;
+            margin-bottom: 28px;
+        }
+        .header h1 {
+            font-size: 24px;
+            margin-bottom: 6px;
+        }
+        .header p {
+            font-size: 13px;
+            opacity: 0.85;
+        }
+        .list {
+            max-width: 520px;
+            margin: 0 auto;
+        }
+        .item {
+            display: block;
+            text-decoration: none;
+            color: inherit;
+            background: #fff;
+            border-radius: 12px;
+            padding: 18px 20px;
+            margin-bottom: 14px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .item:active {
+            transform: scale(0.98);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+        }
+        .item-head {
+            display: flex;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        .icon {
+            font-size: 22px;
+            margin-right: 10px;
+        }
+        .title {
+            font-size: 17px;
+            font-weight: 600;
+            color: #1f2937;
+            flex: 1;
+        }
+        .arrow {
+            color: #9ca3af;
+            font-size: 18px;
+        }
+        .desc {
+            font-size: 13px;
+            color: #6b7280;
+            line-height: 1.5;
+            padding-left: 32px;
+        }
+        .tag {
+            display: inline-block;
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            margin-left: 6px;
+            vertical-align: middle;
+        }
+        .tag-pair { background: #dbeafe; color: #1d4ed8; }
+        .tag-single { background: #dcfce7; color: #166534; }
+        .footer {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 12px;
+            margin-top: 24px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🧪 H5 Demo 导航</h1>
+        <p>选择一个 Demo 进入测试</p>
+    </div>
+
+    <div class="list">
+        <a class="item" href="./webview_capability_test.html">
+            <div class="item-head">
+                <span class="icon">🔍</span>
+                <span class="title">WebView 能力诊断<span class="tag tag-single">独立</span></span>
+                <span class="arrow">›</span>
+            </div>
+            <div class="desc">检测 WebAuthn / Popup / Dialog 等 WebView 能力支持情况</div>
+        </a>
+
+        <a class="item" href="./page_a.html">
+            <div class="item-head">
+                <span class="icon">🔗</span>
+                <span class="title">Cookie & closeWindow 测试<span class="tag tag-pair">A + B</span></span>
+                <span class="arrow">›</span>
+            </div>
+            <div class="desc">从 Page A 进入，可跳转至 Page B 测试 wx.closeWindow 与 Cookie 共享</div>
+        </a>
+    </div>
+
+    <div class="footer">onlineh5demo</div>
+</body>
+</html>
