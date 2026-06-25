@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Page B - wx.closeWindow 测试</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; background: #fefce8; }
+        h1 { color: #333; margin-bottom: 16px; font-size: 20px; }
+        .card { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+        .card h2 { font-size: 16px; color: #666; margin-bottom: 8px; }
+        .cookie-display { background: #fef3c7; border: 1px solid #fcd34d; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 14px; word-break: break-all; min-height: 40px; color: #92400e; }
+        .cookie-display.empty { color: #94a3b8; font-style: italic; }
+        .btn { display: inline-block; padding: 14px 28px; border-radius: 6px; border: none; font-size: 16px; font-weight: 600; cursor: pointer; margin: 6px 6px 6px 0; }
+        .btn-close { background: #dc2626; color: #fff; width: 100%; padding: 16px; font-size: 18px; }
+        .btn-close:active { background: #b91c1c; }
+        .btn-secondary { background: #6b7280; color: #fff; }
+        .log { background: #1e293b; color: #e2e8f0; border-radius: 6px; padding: 12px; font-family: monospace; font-size: 12px; max-height: 200px; overflow-y: auto; margin-top: 8px; }
+        .log-entry { margin-bottom: 4px; }
+        .log-time { color: #94a3b8; }
+        .highlight { background: #fef08a; padding: 8px 12px; border-radius: 4px; margin: 8px 0; font-weight: 500; }
+    </style>
+</head>
+<body>
+    <h1>📄 Page B - wx.closeWindow 调用页</h1>
+
+    <div class="card">
+        <h2>🍪 当前 Cookie 状态（B 页面视角）</h2>
+        <div id="cookieDisplay" class="cookie-display empty">加载中...</div>
+        <p class="highlight">⬆️ 如果能看到 test_flag cookie，说明 cookie 已成功带到 B 页面</p>
+    </div>
+
+    <div class="card">
+        <h2>🔴 关闭窗口操作</h2>
+        <p style="color: #666; margin-bottom: 12px;">点击下方按钮调用 wx.closeWindow()，然后回到 A 页面检查 cookie 是否还在</p>
+        <button class="btn btn-close" onclick="callCloseWindow()">
+            调用 wx.closeWindow() 关闭本页
+        </button>
+        <div style="margin-top: 12px;">
+            <button class="btn btn-secondary" onclick="window.close()">备选: window.close()</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>📝 操作日志</h2>
+        <div id="logArea" class="log">
+            <div class="log-entry"><span class="log-time">[等待操作]</span> 页面已加载</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>ℹ️ 说明</h2>
+        <ul style="padding-left: 20px; line-height: 1.8; color: #555;">
+            <li>本页面加载时会读取并展示当前所有 cookie</li>
+            <li>点击按钮会调用 <code>wx.closeWindow()</code></li>
+            <li>调用后请回到 A 页面检查 cookie 是否被清除</li>
+            <li>如果 wx.closeWindow 不可用（非企微环境），会 fallback 到 window.close()</li>
+        </ul>
+    </div>
+
+    <script src="https://res.wx.qq.com/open/js/jweixin-1.6.0.js"></script>
+    <script>
+        function log(msg) {
+            const logArea = document.getElementById('logArea');
+            const time = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerHTML = `<span class="log-time">[${time}]</span> ${msg}`;
+            logArea.appendChild(entry);
+            logArea.scrollTop = logArea.scrollHeight;
+        }
+
+        function refreshCookieDisplay() {
+            const display = document.getElementById('cookieDisplay');
+            const allCookies = document.cookie;
+
+            if (allCookies) {
+                display.textContent = allCookies;
+                display.classList.remove('empty');
+            } else {
+                display.textContent = '(无 cookie)';
+                display.classList.add('empty');
+            }
+        }
+
+        function callCloseWindow() {
+            log('🔴 准备调用 wx.closeWindow()...');
+            log('📋 调用前 Cookie 快照: ' + (document.cookie || '(无)'));
+            
+            try {
+                if (window.wx && typeof wx.closeWindow === 'function') {
+                    log('✅ wx.closeWindow 可用，正在调用...');
+                    wx.closeWindow();
+                } else if (window.wx && window.wx.invoke) {
+                    log('⚠️ wx.closeWindow 不可直接调用，尝试 wx.invoke...');
+                    wx.invoke('closeWindow', {}, function(res) {
+                        log('wx.invoke closeWindow 结果: ' + JSON.stringify(res));
+                    });
+                } else {
+                    log('⚠️ wx 对象不可用，使用 WeixinJSBridge.invoke 尝试...');
+                    if (window.WeixinJSBridge) {
+                        WeixinJSBridge.invoke('closeWindow', {}, function(res) {
+                            log('WeixinJSBridge.invoke closeWindow 结果: ' + JSON.stringify(res));
+                        });
+                    } else {
+                        log('❌ 非微信/企微环境，fallback 到 window.close()');
+                        window.close();
+                    }
+                }
+            } catch (e) {
+                log('❌ 调用异常: ' + e.message);
+                log('💡 尝试 fallback: window.close()');
+                window.close();
+            }
+        }
+
+        // 页面加载时
+        window.addEventListener('load', () => {
+            log('📄 Page B 已加载');
+            refreshCookieDisplay();
+            
+            const allCookies = document.cookie;
+            if (allCookies.includes('test_flag')) {
+                log('✅ 检测到 A 页面设置的 test_flag Cookie!');
+            } else {
+                log('⚠️ 未检测到 test_flag Cookie（可能 cookie 未跨页面传递）');
+            }
+            
+            // 检查 wx 环境
+            if (window.wx) {
+                log('ℹ️ wx 对象已加载');
+            } else {
+                log('⚠️ wx 对象未加载（可能不在企微环境中）');
+            }
+        });
+    </script>
+</body>
+</html>
