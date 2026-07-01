@@ -7,31 +7,22 @@
         body { font-family: sans-serif; padding: 40px; background: #f5f5f5; }
         button { margin: 10px 0; padding: 12px 20px; font-size: 14px; cursor: pointer; border: 1px solid #ddd; border-radius: 6px; background: #fff; }
         button:hover { background: #f0f7ff; }
-        .url-display { margin-top: 20px; padding: 10px; background: #fff; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 13px; word-break: break-all; }
+        iframe { border: 1px solid #ddd; margin-top: 20px; }
     </style>
 </head>
 <body>
-    <h1>工作台首页 (urlA)</h1>
-    <p>点击按钮模拟页面内路由切换，URL 变为带 <code>?webtarget=out</code> 的地址（页面不刷新）。</p>
+    <h1>工作台首页</h1>
+    <p>点击按钮后，页面内的 iframe 会加载带 <code>?webtarget=out</code> 的地址。</p>
+    <p>客户端 OnBeforeBrowse 会拦截 iframe 导航（is_main_frame=0），检测到 target=out 后跳外部。</p>
 
-    <button onclick="routeToB()">进入审批页面（路由到带 webtarget=out 的地址）</button>
-    <button onclick="routeToHome()">回到首页路由</button>
+    <button onclick="triggerIframe()">点击触发（iframe 加载带 webtarget=out 的URL）</button>
 
-    <div class="url-display">当前URL：<span id="currentUrl"></span></div>
+    <iframe id="subFrame" width="600" height="300" src="about:blank"></iframe>
 
     <script>
-        function routeToB() {
-            history.pushState(null, '', '?webtarget=out');
-            updateDisplay();
+        function triggerIframe() {
+            document.getElementById('subFrame').src = 'https://www.baidu.com/?webtarget=out';
         }
-        function routeToHome() {
-            history.pushState(null, '', location.pathname);
-            updateDisplay();
-        }
-        function updateDisplay() {
-            document.getElementById('currentUrl').textContent = location.href;
-        }
-        updateDisplay();
     </script>
 </body>
 </html>
